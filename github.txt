@@ -1,0 +1,29 @@
+SUBIR CAMBIOS A GITHUB
+
+Añadir los Cambios:
+git add .
+
+Commit:
+git commit -m "Actualización de datos"
+
+Push a GitHub:
+git push origin main
+
+-------------------------------
+
+CONEXIONES VS CODE
+
+- Iniciar Conexiones Remotas
+
+Github
+git remote add origin https://github.com/tu_usuario/tu_repositorio.git  (reemplazar por url del repositorio)
+
+
+- Eliminar Conexiones Remotas
+
+Repositorio de Github
+git remote remove origin
+
+
+- Verificar conexiones actuales
+git remote -v
