@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InstaInsight - Inicio de Sesión</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .login-container {
+      background-color: #ffffff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      width: 90%;
+      max-width: 400px;
+      min-height: 250px;
+      margin: 50px auto 0 auto;
+      text-align: center;
+    }
+
+    .login-container h2 {
+      margin-bottom: 20px;
+    }
+
+    .login-container input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+
+    .login-container button {
+      background-color: #5a67d8;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background-color 0.3s ease;
+    }
+
+    .login-container button:hover {
+      background-color: #4c51bf;
+    }
+
+    .login-container button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .error-message {
+      color: red;
+      margin-top: 10px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: flex-start;
+      padding: 20px;
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: none;
+    }
+
+    .header a {
+      background-color: #5a67d8;
+      color: white;
+      padding: 10px 20px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 1rem;
+      transition: background-color 0.3s ease;
+    }
+
+    .header a:hover {
+      background-color: #4c51bf;
+    }
+
+    .loading-spinner {
+      display: none;
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #5a67d8;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .password-container {
+      position: relative;
+    }
+
+    .password-container input {
+      padding-right: 30px;
+    }
+
+    .password-container .toggle-password {
+      position: absolute;
+      right: 10px;
+      top: 55%;
+      transform: translateY(-50%);
+      cursor: pointer;
+    }
+
+    .password-container .toggle-password img {
+      width: 16px;
+      height: 16px;
+    }
+
+    .verification-code-container {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .verification-code-container button {
+      background-color: #e53e3e;
+      border: none;
+      padding: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+      color: white;
+      transition: background-color 0.3s ease;
+    }
+
+    .verification-code-container button:hover {
+      background-color: #c53030;
+    }
+
+    .verification-code-container .resend-button {
+      margin-top: 10px;
+    }
+
+    .verification-code-container .resend-button.disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .resend-timer {
+      margin-top: 10px;
+      color: #e53e3e;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <a href="/home" id="back-button">Volver al inicio</a>
+  </header>
+
+  <div class="login-container">
+    <h2>InstaInsight</h2>
+    <form id="login-form">
+      <input type="text" id="username" placeholder="Nombre de usuario" required>
+      <div class="password-container">
+        <input type="password" id="password" placeholder="Contraseña" required>
+        <span class="toggle-password">
+          <img src="eye-slash.svg" alt="Mostrar contraseña" id="toggle-password">
+        </span>
+      </div>
+      <div class="verification-code-container" id="verification-code-container">
+        <input type="text" id="verification-code" placeholder="Código de verificación">
+        <button type="button" id="resend-code" class="resend-button">Reenviar código</button>
+        <span id="resend-timer"></span>
+      </div>
+      <button type="submit" id="login-button">Iniciar sesión</button>
+      <div id="loading-spinner" class="loading-spinner"></div>
+    </form>
+    <div id="error-message" class="error-message"></div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const loginForm = document.getElementById('login-form');
+      const usernameField = document.getElementById('username');
+      const passwordField = document.getElementById('password');
+      const verificationCodeContainer = document.getElementById('verification-code-container');
+      const verificationCodeField = document.getElementById('verification-code');
+      const resendCodeButton = document.getElementById('resend-code');
+      const resendTimer = document.getElementById('resend-timer');
+      const togglePassword = document.getElementById('toggle-password');
+      const errorMessage = document.getElementById('error-message');
+      const loadingSpinner = document.getElementById('loading-spinner');
+      const loginButton = document.getElementById('login-button');
+      const backButton = document.getElementById('back-button');
+
+      let resendTimeout;
+
+      function startResendTimer() {
+        let timeLeft = 60; // 60 segundos para el temporizador
+        resendCodeButton.disabled = true;
+        resendCodeButton.classList.add('disabled');
+        resendTimer.textContent = `Reintentar en ${timeLeft} segundos`;
+
+        resendTimeout = setInterval(() => {
+          timeLeft--;
+          resendTimer.textContent = `Reintentar en ${timeLeft} segundos`;
+
+          if (timeLeft <= 0) {
+            clearInterval(resendTimeout);
+            resendTimer.textContent = '';
+            resendCodeButton.disabled = false;
+            resendCodeButton.classList.remove('disabled');
+          }
+        }, 1000);
+      }
+
+      function toggleButtonsState(isDisabled) {
+        loginButton.disabled = isDisabled;
+        backButton.style.pointerEvents = isDisabled ? 'none' : 'auto';
+        backButton.style.opacity = isDisabled ? '0.5' : '1';
+      }
+
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = usernameField.value;
+        const password = passwordField.value;
+        const verificationCode = verificationCodeField.value || null;
+
+        errorMessage.textContent = '';
+
+        loadingSpinner.style.display = 'block';
+        toggleButtonsState(true);
+
+        try {
+          const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, verificationCode })
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            window.location.href = result.redirect;
+          } else {
+            errorMessage.textContent = result.error;
+            if (result.error === 'Se requiere un código de verificación.') {
+              verificationCodeContainer.style.display = 'block';
+            }
+          }
+        } catch (error) {
+          errorMessage.textContent = 'Error al intentar iniciar sesión. Inténtalo de nuevo.';
+        } finally {
+          loadingSpinner.style.display = 'none';
+          toggleButtonsState(false);
+        }
+      });
+
+      resendCodeButton.addEventListener('click', async () => {
+        const username = usernameField.value;
+
+        try {
+          const response = await fetch('/api/resend-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            errorMessage.textContent = result.success;
+            startResendTimer(); // Inicia el temporizador de reenviar código
+          } else {
+            errorMessage.textContent = result.error || 'Error al reenviar el código.';
+          }
+        } catch (error) {
+          errorMessage.textContent = 'Error al reenviar el código.';
+        }
+      });
+
+      togglePassword.addEventListener('click', () => {
+        const type = passwordField.type === 'password' ? 'text' : 'password';
+        passwordField.type = type;
+        togglePassword.src = type === 'password' ? 'eye-slash.svg' : 'eye.svg';
+      });
+
+      backButton.addEventListener('click', () => {
+        window.location.href = '/home';
+      });
+    });
+  </script>
+</body>
+</html>

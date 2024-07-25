@@ -5,6 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InstaInsight - Inicio</title>
   <link rel="stylesheet" href="styles.css">
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      try {
+        const response = await fetch('/api/check-session');
+        const data = await response.json();
+
+        if (data.authenticated) {
+          document.getElementById('login-button').textContent = 'Panel de Control';
+        } else {
+          document.getElementById('login-button').textContent = 'Iniciar Sesión';
+        }
+      } catch (error) {
+        console.error('Error al verificar sesión:', error);
+      }
+    });
+  </script>
 </head>
 <body>
   <header class="header">
@@ -15,11 +31,30 @@
   <main class="content">
     <h2>Bienvenido a InstaInsight</h2>
     <p>Descubre quién te sigue y quién no te sigue en Instagram.</p>
-    <button onclick="window.location.href='/main'">Ir a tu Panel de Control</button>
+    <a href="/auth/instagram">
+      <button>Iniciar sesión con Instagram</button>
+    </a>
   </main>
 
   <footer class="footer">
     <p>&copy; 2024 InstaInsight. Todos los derechos reservados.</p>
   </footer>
+
+  <script>
+    document.getElementById('login-button').addEventListener('click', () => {
+      fetch('/api/check-session')
+        .then(response => response.json())
+        .then(data => {
+          if (data.authenticated) {
+            window.location.href = '/app';
+          } else {
+            window.location.href = '/login';
+          }
+        })
+        .catch(error => {
+          console.error('Error al verificar sesión:', error);
+        });
+    });
+  </script>
 </body>
 </html>

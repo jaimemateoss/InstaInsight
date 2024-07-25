@@ -1,33 +1,57 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const btnFollowers = document.getElementById("btn-followers");
-  const btnFollowing = document.getElementById("btn-following");
-  const btnNotFollowingBack = document.getElementById("btn-not-following-back");
-  const btnNotFollowedBack = document.getElementById("btn-not-followed-back");
-  const resultSection = document.getElementById("result");
+  const loginForm = document.getElementById("login-form");
+  const passwordInput = document.getElementById("password");
+  const togglePassword = document.getElementById("toggle-password");
+  const errorMessage = document.getElementById("error-message");
+  const loadingIndicator = document.getElementById("loading-spinner");
 
-  btnFollowers.addEventListener("click", () => fetchAndDisplay("followers"));
-  btnFollowing.addEventListener("click", () => fetchAndDisplay("following"));
-  btnNotFollowingBack.addEventListener("click", () => fetchAndDisplay("not-following-back"));
-  btnNotFollowedBack.addEventListener("click", () => fetchAndDisplay("not-followed-back"));
-
-  async function fetchAndDisplay(type) {
-    try {
-      const response = await fetch(`/api/${type}`);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
-      displayResults(type, data);
-    } catch (error) {
-      console.error(`Failed to fetch ${type}:`, error);
-      resultSection.innerHTML = `<p>Error fetching data. Please try again later.</p>`;
+  function updatePasswordIcon() {
+    if (passwordInput.type === "password") {
+      togglePassword.src = "Images/eye-slash.svg";
+    } else {
+      togglePassword.src = "Images/eye.svg";
     }
   }
 
-  function displayResults(type, data) {
-    const title = capitalize(type.replace(/-/g, ' '));
-    resultSection.innerHTML = `<h2>${title}</h2><ul>${data.map(username => `<li>@${username}</li>`).join('')}</ul>`;
-  }
+  updatePasswordIcon();
 
-  function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
+  togglePassword.addEventListener("click", () => {
+    if (passwordInput.type === "password") {
+      passwordInput.type = "text";
+    } else {
+      passwordInput.type = "password";
+    }
+    updatePasswordIcon();
+  });
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    errorMessage.textContent = "";
+    loadingIndicator.style.display = 'block';
+
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ username, password })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        window.location.href = result.redirect;
+      } else {
+        errorMessage.textContent = result.error || "Error al iniciar sesión. Por favor, intente de nuevo.";
+      }
+    } catch (error) {
+      errorMessage.textContent = "Error en la conexión. Por favor, intente de nuevo.";
+    } finally {
+      loadingIndicator.style.display = 'none';
+    }
+  });
 });

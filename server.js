@@ -1,110 +1,117 @@
-const express = require('express');
-const { IgApiClient } = require('instagram-private-api');
-const config = require('./config.json');
-const path = require('path');
+import express from 'express';
+import { IgApiClient } from 'instagram-private-api';
+import session from 'express-session';
+import path from 'path';
+import bodyParser from 'body-parser';
+import puppeteer from 'puppeteer';
+import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config(); // Cargar variables de entorno
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Servir archivos estáticos de las carpetas Presentation y Main
-app.use(express.static(path.join(__dirname, 'Presentation')));
-app.use(express.static(path.join(__dirname, 'Main')));
+// Configuración de variables para Instagram
+const IG_CLIENT_ID = '3804774203173101';
+const IG_CLIENT_SECRET = '8e342fa5d04446ae7a934e43bf7b6365';
+const IG_REDIRECT_URI = process.env.IG_REDIRECT_URI || 'http://localhost:3000/auth/instagram/callback';
 
-// Inicializa el cliente de Instagram
-async function loginToInstagram() {
-  const ig = new IgApiClient();
-  ig.state.generateDevice(config.username);
-  await ig.account.login(config.username, config.password);
-  return ig;
-}
+app.use(express.static(path.join(process.cwd(), 'Presentation')));
+app.use(express.static(path.join(process.cwd(), 'App')));
+app.use(express.static(path.join(process.cwd(), 'Images')));
 
-// Ruta para obtener seguidores
-app.get('/api/followers', async (req, res) => {
+app.use(session({
+  secret: '@J25m01l2008!',
+  resave: false,
+  saveUninitialized: true,
+}));
+
+app.use(bodyParser.json());
+
+const ig = new IgApiClient();
+
+// Endpoint para iniciar sesión con Instagram
+app.get('/auth/instagram', (req, res) => {
+  const authUrl = `https://api.instagram.com/oauth/authorize/?client_id=${IG_CLIENT_ID}&redirect_uri=${IG_REDIRECT_URI}&response_type=code`;
+  res.redirect(authUrl);
+});
+
+// Endpoint de callback de Instagram
+app.get('/auth/instagram/callback', async (req, res) => {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.status(400).json({ error: 'Código de autorización no proporcionado' });
+  }
+
   try {
-    const ig = await loginToInstagram();
-    const followersFeed = ig.feed.accountFollowers(ig.state.cookieUserId);
-    const followers = await getAllItems(followersFeed);
-    res.json(followers.map(f => f.username));
+    // Intercambiar código de autorización por token de acceso
+    const response = await axios.post('https://api.instagram.com/oauth/access_token', {
+      client_id: IG_CLIENT_ID,
+      client_secret: IG_CLIENT_SECRET,
+      grant_type: 'authorization_code',
+      redirect_uri: IG_REDIRECT_URI,
+      code: code
+    });
+
+    const { access_token, user } = response.data;
+
+    // Guardar información del usuario en la sesión
+    req.session.username = user.username;
+    req.session.avatarUrl = user.profile_picture;
+
+    res.redirect('/app');  // Redirige al usuario a la página principal de tu aplicación
   } catch (error) {
-    console.error('Error fetching followers:', error.message);
-    res.status(500).json({ error: 'Failed to fetch followers' });
+    console.error('Error al obtener el token de acceso:', error);
+    res.status(500).json({ error: 'Error al obtener el token de acceso' });
   }
 });
 
-// Ruta para obtener seguidos
-app.get('/api/following', async (req, res) => {
-  try {
-    const ig = await loginToInstagram();
-    const followingFeed = ig.feed.accountFollowing(ig.state.cookieUserId);
-    const following = await getAllItems(followingFeed);
-    res.json(following.map(f => f.username));
-  } catch (error) {
-    console.error('Error fetching following:', error.message);
-    res.status(500).json({ error: 'Failed to fetch following' });
+// Endpoint para obtener información del usuario
+app.get('/api/user-info', (req, res) => {
+  const username = req.session.username;
+  if (username) {
+    res.status(200).json({
+      username: username,
+      avatarUrl: req.session.avatarUrl
+    });
+  } else {
+    res.status(401).json({ error: 'No autorizado' });
   }
 });
 
-// Ruta para obtener usuarios que no te siguen de vuelta
-app.get('/api/not-following-back', async (req, res) => {
-  try {
-    const ig = await loginToInstagram();
-    const followersFeed = ig.feed.accountFollowers(ig.state.cookieUserId);
-    const followingFeed = ig.feed.accountFollowing(ig.state.cookieUserId);
-
-    const followers = await getAllItems(followersFeed);
-    const following = await getAllItems(followingFeed);
-
-    const notFollowingBack = following.filter(user => !followers.some(follower => follower.pk === user.pk));
-    res.json(notFollowingBack.map(f => f.username));
-  } catch (error) {
-    console.error('Error fetching not following back:', error.message);
-    res.status(500).json({ error: 'Failed to fetch not following back' });
-  }
+// Endpoint para cerrar sesión
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error('Error al cerrar sesión:', err);
+      return res.status(500).json({ error: 'Error al cerrar sesión' });
+    }
+    res.status(200).json({ message: 'Sesión cerrada exitosamente' });
+  });
 });
 
-// Ruta para obtener usuarios que no sigues de vuelta
-app.get('/api/not-followed-back', async (req, res) => {
-  try {
-    const ig = await loginToInstagram();
-    const followersFeed = ig.feed.accountFollowers(ig.state.cookieUserId);
-    const followingFeed = ig.feed.accountFollowing(ig.state.cookieUserId);
-
-    const followers = await getAllItems(followersFeed);
-    const following = await getAllItems(followingFeed);
-
-    const notFollowedBack = followers.filter(follower => !following.some(user => user.pk === follower.pk));
-    res.json(notFollowedBack.map(f => f.username));
-  } catch (error) {
-    console.error('Error fetching not followed back:', error.message);
-    res.status(500).json({ error: 'Failed to fetch not followed back' });
-  }
-});
-
-// Función auxiliar para obtener todos los elementos de un feed
-async function getAllItems(feed) {
-  const items = [];
-  let response = await feed.items();
-  items.push(...response);
-
-  while (feed.isMoreAvailable()) {
-    response = await feed.items();
-    items.push(...response);
-  }
-
-  return items;
-}
-
-// Ruta para servir el archivo index.html como página principal
+// Servir archivos estáticos
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'Presentation', 'index.html'));
+  res.sendFile(path.join(process.cwd(), 'Presentation', 'index.html'));
 });
 
-// Ruta para servir el archivo main.html desde la carpeta Main
-app.get('/main', (req, res) => {
-  res.sendFile(path.join(__dirname, 'Main', 'main.html'));
+app.get('/home', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'Presentation', 'index.html'));
 });
 
-// Inicia el servidor
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'Presentation', 'login.html'));
+});
+
+app.get('/app', (req, res) => {
+  if (!req.session.username) {
+    return res.redirect('/login');
+  }
+  res.sendFile(path.join(process.cwd(), 'App', 'app.html'));
+});
+
 app.listen(port, () => {
   console.log(`Servidor iniciado en http://localhost:${port}`);
 });
